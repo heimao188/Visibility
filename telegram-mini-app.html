@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>TG Mini App 模板</title>
+  <!-- Telegram WebApp SDK（必须放在 head 里，脚本阻塞加载） -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    /* ===== 基础重置 ===== */
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Helvetica Neue", "Microsoft YaHei", sans-serif;
+      background: var(--tg-bg-color, #ffffff);
+      color: var(--tg-text-color, #111111);
+      padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    /* ===== 主题变量（Telegram 注入，浏览器预览时给兜底值） ===== */
+    :root {
+      --tg-bg-color: #ffffff;
+      --tg-secondary-bg-color: #f1f3f5;
+      --tg-text-color: #111111;
+      --tg-hint-color: #8a8a8e;
+      --tg-link-color: #2481cc;
+      --tg-button-color: #2481cc;
+      --tg-button-text-color: #ffffff;
+      --tg-header-bg-color: #ffffff;
+      --tg-section-bg-color: #ffffff;
+    }
+
+    .card {
+      background: var(--tg-section-bg-color, var(--tg-secondary-bg-color, #f1f3f5));
+      border-radius: 16px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    header.hero {
+      text-align: center;
+      padding: 24px 8px 8px;
+    }
+    .avatar {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: var(--tg-button-color, #2481cc);
+      color: #fff; font-size: 28px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 12px;
+      overflow: hidden;
+    }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .nickname { font-size: 18px; font-weight: 600; }
+    .username { color: var(--tg-hint-color, #8a8a8e); font-size: 14px; margin-top: 4px; }
+
+    .row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid rgba(128,128,128,.15);
+      font-size: 15px;
+    }
+    .row:last-child { border-bottom: none; }
+    .row .label { color: var(--tg-hint-color, #8a8a8e); }
+    .row .value { text-align: right; word-break: break-all; }
+
+    h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+
+    button.tg-btn {
+      width: 100%;
+      border: none; border-radius: 12px;
+      background: var(--tg-button-color, #2481cc);
+      color: var(--tg-button-text-color, #fff);
+      font-size: 16px; font-weight: 500;
+      padding: 14px; margin: 8px 0;
+      cursor: pointer;
+    }
+    button.tg-btn.secondary {
+      background: var(--tg-secondary-bg-color, #f1f3f5);
+      color: var(--tg-text-color, #111);
+    }
+    button.tg-btn:active { opacity: .85; }
+
+    .badge {
+      display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 999px;
+      background: var(--tg-secondary-bg-color, #f1f3f5); color: var(--tg-hint-color, #8a8a8e);
+    }
+    pre {
+      font-size: 12px; color: var(--tg-hint-color, #8a8a8e);
+      white-space: pre-wrap; word-break: break-all;
+      max-height: 120px; overflow: auto;
+    }
+    .tip { font-size: 13px; color: var(--tg-hint-color, #8a8a8e); text-align: center; margin-top: 16px; }
+  </style>
+</head>
+<body>
+
+  <header class="hero">
+    <div class="avatar" id="avatar">?</div>
+    <div class="nickname" id="nickname">未获取到用户</div>
+    <div class="username" id="username">—</div>
+  </header>
+
+  <section class="card">
+    <h2>当前用户信息</h2>
+    <div class="row"><span class="label">用户 ID</span><span class="value" id="userId">—</span></div>
+    <div class="row"><span class="label">语言</span><span class="value" id="lang">—</span></div>
+    <div class="row"><span class="label">平台</span><span class="value" id="platform">—</span></div>
+    <div class="row"><span class="label">主题</span><span class="value" id="theme">—</span></div>
+  </section>
+
+  <section class="card">
+    <h2>initData（鉴权用，发送给后端校验）</h2>
+    <pre id="initData">空（浏览器预览环境）</pre>
+  </section>
+
+  <section class="card">
+    <button class="tg-btn" id="btnMain">主按钮：点击反馈</button>
+    <button class="tg-btn secondary" id="btnCopy">复制 initData</button>
+    <button class="tg-btn secondary" id="btnShare">打开外部链接示例</button>
+    <button class="tg-btn secondary" id="btnClose">关闭 Mini App</button>
+  </section>
+
+  <p class="tip">纯静态模板：部署到 HTTPS 后，在 @BotFather 用 /newapp 绑定网址即可。</p>
+
+  <script>
+    // ===== 1. 初始化 Telegram WebApp =====
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    const isTg = !!tg;
+
+    if (isTg) {
+      tg.ready();                 // 告知 WebApp 已就绪
+      tg.expand();                // 全屏展开
+      // 跟随 Telegram 主题变化
+      tg.onEvent('themeChanged', applyTheme);
+    }
+
+    // ===== 2. 渲染用户信息 =====
+    function renderUser() {
+      const user = isTg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
+
+      if (user) {
+        const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || '用户';
+        document.getElementById('nickname').textContent = name;
+        document.getElementById('username').textContent = user.username ? '@' + user.username : '—';
+        document.getElementById('userId').textContent = user.id;
+        document.getElementById('lang').textContent = user.language_code || '—';
+        document.getElementById('avatar').textContent = (name[0] || '?').toUpperCase();
+        if (user.photo_url) {
+          document.getElementById('avatar').innerHTML =
+            '<img src="' + user.photo_url + '" alt="avatar" />';
+        }
+      } else {
+        document.getElementById('nickname').textContent = '浏览器预览模式';
+        document.getElementById('username').textContent = '在 Telegram 内打开后显示真实用户';
+      }
+
+      document.getElementById('platform').textContent =
+        isTg ? (tg.platform || 'unknown') : 'browser';
+      document.getElementById('theme').textContent =
+        isTg ? (tg.colorScheme || 'system') : 'system';
+
+      const initData = isTg ? tg.initData : '';
+      document.getElementById('initData').textContent =
+        initData ? initData : '空（浏览器预览环境）';
+    }
+
+    // ===== 3. 主题色适配 =====
+    function applyTheme() {
+      if (!isTg) return;
+      const t = tg.themeParams || {};
+      const root = document.documentElement.style;
+      if (t.bg_color) root.setProperty('--tg-bg-color', t.bg_color);
+      if (t.text_color) root.setProperty('--tg-text-color', t.text_color);
+      if (t.hint_color) root.setProperty('--tg-hint-color', t.hint_color);
+      if (t.button_color) root.setProperty('--tg-button-color', t.button_color);
+      if (t.button_text_color) root.setProperty('--tg-button-text-color', t.button_text_color);
+      if (t.secondary_bg_color) root.setProperty('--tg-secondary-bg-color', t.secondary_bg_color);
+    }
+
+    // ===== 4. 按钮事件 =====
+    // 主按钮反馈：震动 + 提示
+    document.getElementById('btnMain').addEventListener('click', () => {
+      if (isTg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+      alert('主按钮被点击，可在这里调用你的业务逻辑。');
+    });
+
+    // 复制 initData
+    document.getElementById('btnCopy').addEventListener('click', async () => {
+      const text = (isTg ? tg.initData : '') || '';
+      try {
+        await navigator.clipboard.writeText(text);
+        alert('已复制 initData');
+      } catch (e) {
+        prompt('手动复制：', text);
+      }
+    });
+
+    // 打开外部链接
+    document.getElementById('btnShare').addEventListener('click', () => {
+      if (isTg) tg.openLink('https://telegram.org');
+      else window.open('https://telegram.org', '_blank');
+    });
+
+    // 关闭 Mini App
+    document.getElementById('btnClose').addEventListener('click', () => {
+      if (isTg) tg.close();
+      else alert('浏览器环境无法关闭，请在 Telegram 内测试。');
+    });
+
+    // ===== 5. 启动渲染 =====
+    applyTheme();
+    renderUser();
+  </script>
+</body>
+</html>
